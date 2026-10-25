@@ -125,6 +125,7 @@ const T = {"h1": "镜头事件评审", "intro": "<p>你将观看一些由 AI 生
 const MODE = "standalone";  // "standalone": a static page (GitHub Pages), without the claude.ai runtime
 const V = ["a", "b"];  // the two versions of every item; opaque ("a", "b") in a standalone page
 const P5 = "0000101010111100000101110000111101100001";  // part-A version bits of rater slot 5 (slot 6: the complement), drawn by the generator
+const STUDY = "beat-check";  // a later round on the same site keeps its own answers and file name
 const SLOTS = 6;
 const $ = (id) => document.getElementById(id);
 const fill = (s, v) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k]));
@@ -152,7 +153,7 @@ function buildQueue(slot) {
   return a.concat(b);
 }
 
-function localKey() { return "beatcheck-answers-r" + state.slot; }
+function localKey() { return (STUDY === "beat-check" ? "beatcheck" : STUDY) + "-answers-r" + state.slot; }
 function loadLocal() { try { return JSON.parse(localStorage.getItem(localKey()) || "{}"); } catch { return {}; } }
 function saveLocal() { try { localStorage.setItem(localKey(), JSON.stringify(state.answers)); } catch {} }
 
@@ -312,7 +313,7 @@ function finish() {
 }
 
 function answersText() {
-  return JSON.stringify({ page: "beat-check", slot: state.slot, saved: new Date().toISOString(), answers: state.answers }, null, 1);
+  return JSON.stringify({ page: STUDY, slot: state.slot, saved: new Date().toISOString(), answers: state.answers }, null, 1);
 }
 
 async function begin() {
@@ -343,7 +344,7 @@ function setup() {
   $("download").addEventListener("click", () => {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([answersText()], { type: "application/json" }));
-    a.download = "beatcheck_r" + state.slot + ".json";
+    a.download = (STUDY === "beat-check" ? "beatcheck" : STUDY) + "_r" + state.slot + ".json";
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     $("copy-status").textContent = T.downloaded;
   });

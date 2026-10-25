@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>镜头事件评审（第二轮）</title>
+<style>
+/* Layout: one screening column; the video sits in a dark well with an edit-timeline strip (prev shot | beat | next shot) under it, questions below as large choice rows. */
+:root {
+  --bg: #f1f3f6; --panel: #ffffff; --ink: #1c2330; --muted: #586373; --line: #d6dce4;
+  --well: #11151b; --well-ink: #c9d2dd; --ctx: #a1c1e2; --beat: #f4bf98; --on-fill: #1c2330;
+  --accent: #2c5d8f; --accent-ink: #ffffff; --sel: #dce8f5; --warn: #9a5b12;
+  --display: "IBM Plex Sans Condensed", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #13171d; --panel: #1b2129; --ink: #e6eaf0; --muted: #9aa5b3; --line: #2c3540;
+  --well: #0a0d11; --well-ink: #c9d2dd; --ctx: #7d9fc4; --beat: #e6a676; --on-fill: #11151b;
+  --accent: #8db6e0; --accent-ink: #0f1722; --sel: #22354a; --warn: #e2a65b; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #13171d; --panel: #1b2129; --ink: #e6eaf0; --muted: #9aa5b3; --line: #2c3540;
+  --well: #0a0d11; --well-ink: #c9d2dd; --ctx: #7d9fc4; --beat: #e6a676; --on-fill: #11151b;
+  --accent: #8db6e0; --accent-ink: #0f1722; --sel: #22354a; --warn: #e2a65b; color-scheme: dark }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 1rem/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px; }
+main { max-width: 880px; margin: 0 auto; display: grid; gap: 20px; }
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+h1 { font: 600 1.6rem/1.15 var(--display); letter-spacing: .01em; margin: 0; text-wrap: balance; }
+h2 { font: 600 1.15rem/1.3 var(--display); letter-spacing: .02em; margin: 0; text-wrap: balance; }
+.label { font: 500 .72rem/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.status { font: 400 .8rem/1.3 var(--body); color: var(--muted); }
+.status.warn { color: var(--warn); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 16px; min-width: 0; }
+.prose { max-width: 65ch; display: grid; gap: 10px; }
+.prose p, .prose ul { margin: 0; }
+.prose ul { padding-left: 1.2em; display: grid; gap: 4px; }
+.event { font: 500 1.05rem/1.5 var(--body); max-width: 70ch; display: grid; gap: 4px; margin: 0; }
+.event .orig { font: 400 .82rem/1.45 var(--body); color: var(--muted); }
+.progress { display: flex; align-items: center; gap: 12px; }
+.bar { flex: 1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.count { font: 500 .8rem/1 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.reel { display: grid; gap: 8px; min-width: 0; }
+.well { background: var(--well); border-radius: 8px; padding: 6px; outline: 3px solid transparent; outline-offset: 2px; transition: outline-color .15s; }
+.well.inbeat { outline-color: var(--beat); }
+.well video { display: block; width: 100%; max-width: 100%; aspect-ratio: 640 / 368; background: var(--well); border-radius: 4px; }
+.strip { position: relative; display: flex; height: 22px; border-radius: 4px; overflow: hidden; gap: 2px; background: var(--well); padding: 2px; }
+.strip > span { display: flex; align-items: center; justify-content: center; min-width: 0; overflow: hidden; white-space: nowrap;
+  font: 500 .66rem/1 var(--body); letter-spacing: .04em; color: var(--on-fill); border-radius: 2px; }
+.strip .ctx { background: var(--ctx); } .strip .beat { background: var(--beat); }
+.strip .head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--well-ink); left: 2px; pointer-events: none; }
+.reelbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.tc { font: 400 .78rem/1 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.pair { display: grid; gap: 16px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .pair { grid-template-columns: 1fr 1fr; } }
+fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+#qs { display: grid; gap: 20px; }
+legend { font: 600 .98rem/1.4 var(--body); padding: 0; margin-bottom: 8px; }
+.hint { font-size: .85rem; color: var(--muted); font-weight: 400; }
+.choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.choices label { flex: 1 1 90px; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 12px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel); cursor: pointer; font-weight: 500; text-align: center; }
+.choices input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.choices label:has(input:checked) { background: var(--sel); border-color: var(--accent); }
+.choices label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+button { font: 600 .95rem/1 var(--body); min-height: 44px; padding: 0 20px; border-radius: 8px; border: 1px solid var(--accent); cursor: pointer;
+  background: var(--accent); color: var(--accent-ink); }
+button.ghost { background: transparent; color: var(--accent); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.slots { display: flex; flex-wrap: wrap; gap: 8px; }
+.slots label { min-width: 88px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.why { font-size: .85rem; color: var(--muted); }
+textarea { width: 100%; min-height: 160px; font: 400 .75rem/1.4 var(--mono); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; box-sizing: border-box; }
+[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .bar > i, .well { transition: none; } }
+</style>
+
+</head>
+<body>
+<main lang="zh-CN">
+  <header class="top">
+    <h1>镜头事件评审（第二轮）</h1>
+    <span class="status" id="save-status">答案会自动保存在本浏览器中。全部完成后，请下载答案文件发给组织者。</span>
+  </header>
+
+  <section class="panel" id="start">
+    <div class="prose"><p>你将观看一些由 AI 生成的影片片段。每个片段由连续的三个镜头组成：前一个镜头、<strong>中间镜头</strong>（我们要问的那一刻）和后一个镜头。视频下方的时间条用橙色标出中间镜头；播放到中间镜头时，视频外框也会变成橙色。少数片段位于影片的开头或结尾，只有两个镜头，这是正常的。</p><ul><li><strong>第一部分</strong>：每次看一个片段。中间镜头是否表现出了上方写的事件？画面有没有明显的问题？</li><li><strong>第二部分</strong>：同一时刻的两个版本并排播放。哪个版本把事件表现得更清楚？哪个看起来更自然？</li></ul><p>只根据你看到的画面判断。一个动作可以跨剪辑来表现（剪辑前一个镜头、剪辑后一个镜头），只要观众能明白事件发生了，就算表现出来了。片段没有声音。大多数人需要<span id="est"></span>。</p><p>请用电脑上的浏览器（Chrome、Edge 或 Safari）打开，不要用微信内置浏览器；请在同一个浏览器里完成，中途关闭页面不会丢失进度。</p></div>
+    <fieldset>
+      <legend>你的评审编号 <span class="hint">（见发给你的链接）</span></legend>
+      <div class="choices slots" id="slots"></div>
+    </fieldset>
+    <div class="actions">
+      <span class="why" id="resume-note"></span>
+      <button id="go" type="button" disabled>开始</button>
+    </div>
+  </section>
+
+  <section class="panel" id="rate" hidden>
+    <div class="progress"><span class="label" id="part-label"></span><div class="bar"><i id="bar"></i></div><span class="count" id="count"></span></div>
+    <div class="event" id="event"></div>
+    <div id="stage"></div>
+    <form id="qs"></form>
+    <div class="actions">
+      <span class="why" id="gate"></span>
+      <button id="next" type="button" disabled>下一题</button>
+    </div>
+  </section>
+
+  <section class="panel" id="done" hidden>
+    <h2>全部完成，谢谢！</h2>
+    <div class="prose"><p id="done-note"></p></div>
+    <div class="actions"><span class="btns"><button id="download" type="button" hidden>下载答案文件</button><button id="copy" type="button" class="ghost">复制我的答案</button></span><span class="status" id="copy-status"></span></div>
+    <textarea id="dump" readonly hidden></textarea>
+  </section>
+</main>
+
+<script>
+const ITEMS = [{"id": "S1__27_three_friends_surprise_planning__shot_02_table_coordination", "window": {"a": [4.56, 7.69], "b": [4.56, 7.75]}, "event_shown": "特写镜头：桌上的手在日历上做标记、写下时间，并将物资清单推到中央，袖口和配饰清晰可见。", "event_orig": "Close-up on hands at the table as they mark a calendar, write a time, and slide a supplies list into the center, with their distinct sleeves and accessories visible.", "clip": {"a": "eba4616b8776.mp4", "b": "d34480d13f2b.mp4"}}, {"id": "S1__27_three_friends_surprise_planning__shot_12_hiding_behind_screen", "window": {"a": [4.56, 8.69], "b": [4.56, 8.75]}, "event_shown": "三位朋友在入口附近的屏风后蹲伏，A调暗手机屏幕，B指向藏身之处，C从屏风后探头张望后退缩，三人均保持各自服装清晰可见。", "event_orig": "The three friends huddle behind a folding screen near the entryway, A dims her phone screen, B points to a hiding spot, and C peeks around the screen before retreating, all maintaining their distinct clothing visibility.", "clip": {"a": "6bc84dc9cb98.mp4", "b": "7df935378116.mp4"}}, {"id": "S1__01_chef_international_kitchens__shot_08_chef_presents_fusion_dish", "window": {"a": [4.56, 10.75], "b": [4.56, 10.69]}, "event_shown": "厨师站在原测试厨房，展示一道精心制作的融合菜，指向打开的笔记本，平静地品尝一口，微微一笑，然后用松紧带合上笔记本。", "event_orig": "The chef stands in the original test kitchen, presents a composed fusion dish, gestures to his open notebook, takes a calm tasting bite, smiles subtly, and closes the notebook with the elastic strap.", "clip": {"a": "76f71b49fb7e.mp4", "b": "ff1486989fa7.mp4"}}, {"id": "S1__15_puzzle_solving_escape_room__shot_11_retrieves_cable_module", "window": {"a": [5.06, 9.75], "b": [5.06, 9.69]}, "event_shown": "Priya 打开计时器下方踢脚线旁的地板暗格，Jonas 取出一卷带插头和小型电源模块的电缆，Mira 用紫外线灯短暂照入暗格后关闭。", "event_orig": "Priya opens a floor-level hatch near the baseboard under the timer, and Jonas retrieves a coiled cable with a plug and a small power module, while Mira shines the UV lamp briefly into the hatch and then turns it off.", "clip": {"a": "6ca4f279716c.mp4", "b": "c667e75fbf42.mp4"}}, {"id": "S1__33_colleagues_brainstorming_ideas__shot_03_over_the_shoulder_c_laptop", "window": {"a": [3.31, 7.19], "b": [3.31, 7.19]}, "event_shown": "从角色C身后拍摄的过肩镜头显示，她转动笔记本电脑展示一个列表模板，促使角色A和角色B凑近，准备开始头脑风暴。", "event_orig": "An over-the-shoulder shot from behind Character C shows her rotating her laptop to display a list template, prompting Character A and Character B to lean in and prepare to begin brainstorming.", "clip": {"a": "83bcd2c629c7.mp4", "b": "53dd715d4413.mp4"}}, {"id": "S1__29_scientists_lab_collaboration__shot_08_system_instability", "window": {"a": [3.06, 5.69], "b": [3.06, 5.69]}, "event_shown": "笔记本波形突然变得锯齿状；科学家B抬手暂停输入，科学家A稳住腔体，两人均以克制动作应对突发的不稳定。", "event_orig": "The laptop waveform suddenly becomes jagged; Scientist B raises his hand to pause input while Scientist A braces the chamber, both reacting with controlled movements to an unexpected instability.", "clip": {"a": "ff8dfb87aa00.mp4", "b": "8a903c432f9b.mp4"}}, {"id": "S1__27_three_friends_surprise_planning__shot_09_decorating_room", "window": {"a": [5.06, 10.75], "b": [5.06, 10.69]}, "event_shown": "主房间内，A 在系气球绳，B 站在凳子上将“HAPPY DAY!”横幅贴到墙上，C 绕着柱子缠绕青色丝带，三人动作协调有节奏。", "event_orig": "In the main room, A ties balloon strings, B tapes a 'HAPPY DAY!' banner to the wall from a step stool, and C winds teal ribbon around a pillar, all moving in coordinated rhythm.", "clip": {"a": "7acca9794d27.mp4", "b": "88973c61af6c.mp4"}}, {"id": "S1__29_scientists_lab_collaboration__shot_06_stability_adjustment", "window": {"a": [4.06, 7.69], "b": [4.06, 7.69]}, "event_shown": "科学家B调整笔记本电脑上的参数，同时科学家A指向屏幕上的阈值线；波形短暂晃动，稳定性指示器闪烁至警告状态。", "event_orig": "Scientist B adjusts a parameter on the laptop while Scientist A points to a threshold line on the screen; the waveform wobbles briefly and the stability indicator flickers to caution.", "clip": {"a": "81ebcc2ffbc4.mp4", "b": "0057ef263ac8.mp4"}}, {"id": "S1__33_colleagues_brainstorming_ideas__shot_07_over_the_shoulder_a_passing_note", "window": {"a": [3.56, 6.69], "b": [3.56, 6.69]}, "event_shown": "镜头从角色 A 身后拍摄，她把便利贴递给角色 B，角色 B 指向白板上的空白处，角色 C 迅速记下，展现出流畅的思路交流。", "event_orig": "From behind Character A, she hands a sticky note to Character B, who points to an empty space on the whiteboard, while Character C makes a quick note, demonstrating a smooth exchange of ideas.", "clip": {"a": "0cc759982bb7.mp4", "b": "a8e7844f24d8.mp4"}}, {"id": "S1__35_musicians_band_rehearsal__shot_06_a_b_c_resetting", "window": {"a": [5.06, 9.25], "b": [5.06, 9.19]}, "event_shown": "角色A停顿并指向乐谱上的一个节拍；角色B凑近点头，角色C前倾注视提示，三人默默重新准备。", "event_orig": "Character A pauses to point at a measure on the sheet music; Character B leans in and nods, and Character C leans forward, watching the cue as they reset together silently.", "clip": {"a": "469bd5890e2a.mp4", "b": "91a2427f3ae0.mp4"}}, {"id": "S1__09_athlete_training_conditions__shot_06_athlete_steps_over_rock", "window": {"a": [5.06, 7.69], "b": [5.06, 8.25]}, "event_shown": "低角度特写镜头中，运动员快速移动脚步，小心跨过沙漠小径上的一块小石头，沙粒随之飞溅。", "event_orig": "In a low-angle close-up, the athlete performs quick-footwork steps, carefully stepping over a small rock on the desert trail, sending sand grains skittering as he moves.", "clip": {"a": "59f75b97c5ec.mp4", "b": "25ed4b011a6c.mp4"}}, {"id": "S1__15_puzzle_solving_escape_room__shot_08_repositions_balls", "window": {"a": [3.56, 8.19], "b": [3.56, 8.25]}, "event_shown": "团队将台球桌上的三个台球按纸条上的箭头图重新摆放，Mira 和 Priya 用手引导球，Jonas 扶稳其中一个，最后一个球到位时隐约传来机械声。", "event_orig": "The team repositions three billiard balls on the pool table to match the arrow diagram from the note, with Mira’s and Priya’s hands guiding the balls and Jonas steadying one, and a faint mechanical sound is implied as the last ball clicks into place.", "clip": {"a": "045911cea44a.mp4", "b": "c06d63560a8b.mp4"}}, {"id": "S1__11_filmmaker_lighting_setups__shot_07_studio_softbox_control", "window": {"a": [4.81, 7.94], "b": [4.81, 8.5]}, "event_shown": "导演站在白色环形影棚中，将柔光箱向内旋转以打亮面部，查看相机屏幕上的直方图，随着相机微幅倾斜，他满意地点了点头。", "event_orig": "The filmmaker stands in a white cyc studio, rotates a softbox inward to model his face, checks the histogram on the camera screen, and nods in satisfaction as the camera tilts microscopically.", "clip": {"a": "39beb6bb4f5a.mp4", "b": "9491818c0192.mp4"}}, {"id": "S1__17_family_gathering_victorian_mansion__shot_04_family_repositions", "window": {"a": [3.31, 6.44], "b": [3.31, 6.5]}, "event_shown": "25岁女子从茶几后走向壁炉，部分被家具遮挡；45岁男子和48岁女子走向沙发，42岁女子留在茶几旁。", "event_orig": "The 25-year-old woman walks behind the tea table toward the fireplace, partially occluded by furniture; the 45-year-old man and 48-year-old woman move toward the settee, while the 42-year-old woman remains by the tea table.", "clip": {"a": "07ab4515528b.mp4", "b": "4a09a2a25e1c.mp4"}}];
+const T = {"h1": "镜头事件评审（第二轮）", "intro": "<p>你将观看一些由 AI 生成的影片片段。每个片段由连续的三个镜头组成：前一个镜头、<strong>中间镜头<\/strong>（我们要问的那一刻）和后一个镜头。视频下方的时间条用橙色标出中间镜头；播放到中间镜头时，视频外框也会变成橙色。少数片段位于影片的开头或结尾，只有两个镜头，这是正常的。<\/p><ul><li><strong>第一部分<\/strong>：每次看一个片段。中间镜头是否表现出了上方写的事件？画面有没有明显的问题？<\/li><li><strong>第二部分<\/strong>：同一时刻的两个版本并排播放。哪个版本把事件表现得更清楚？哪个看起来更自然？<\/li><\/ul><p>只根据你看到的画面判断。一个动作可以跨剪辑来表现（剪辑前一个镜头、剪辑后一个镜头），只要观众能明白事件发生了，就算表现出来了。片段没有声音。大多数人需要<span id=\"est\"><\/span>。<\/p><p>请用电脑上的浏览器（Chrome、Edge 或 Safari）打开，不要用微信内置浏览器；请在同一个浏览器里完成，中途关闭页面不会丢失进度。<\/p>", "slot_legend": "你的评审编号", "slot_hint": "（见发给你的链接）", "rater": "评审 ", "start": "开始", "next": "下一题", "done_h": "全部完成，谢谢！", "copy": "复制我的答案", "connecting": "答案会自动保存在本浏览器中。全部完成后，请下载答案文件发给组织者。", "saved": "答案会随作答自动保存。", "local": "答案仅保存在本浏览器中，结束时请复制答案。", "local_signin": "答案仅保存在本浏览器中（登录后可保存到研究中），结束时请复制答案。", "no_access": "你的权限无法在此保存答案，答案仅保存在本浏览器中，结束时请复制答案。", "save_failed": "保存失败，答案仅保存在本浏览器中，结束时请复制答案。", "part_a": "第一部分", "part_b": "第二部分", "of": " / ", "event_label": "中间镜头中的事件", "clip": "片段", "version": "版本 ", "aria": "：前一镜头、中间镜头、后一镜头", "prev": "前一镜头", "mid": "中间镜头", "nxt": "后一镜头", "play_both": "从头同时播放两个版本", "q_shown": "中间镜头是否表现出了这个事件？", "yes": "是", "partly": "部分", "no": "否", "q_broken": "中间镜头里有没有明显的问题？", "h_broken": "（肢体融化或多出、物体变形或突然出现、画面卡住不动）", "q_clear": "哪个版本把事件表现得更清楚？", "q_natural": "哪个版本看起来更自然？", "same": "差不多", "watch_one": "请看到中间镜头结束之后再作答。", "watch_two": "请把两个版本都看到中间镜头结束之后。", "answer_both": "请回答两个问题。", "done_db": "你的答案已保存，可以关闭此页面。", "done_local": "你的答案只保存在本浏览器中，请复制后发给组织者。", "copied": "已复制。", "select_copy": "请全选并复制下面的文字。", "pick_slot": "请先选择你的评审编号。", "resume": "你已回答 {n} 题（共 {m} 题），点击开始将从上次停下的地方继续。", "total": "共 {m} 道小题。", "minutes": "约 {k} 分钟", "no_prev": "这一段是影片的开头：没有前一个镜头，视频一开始就是中间镜头。", "no_next": "这一段是影片的结尾：中间镜头之后没有下一个镜头。", "standalone_saved": "答案会自动保存在本浏览器中。全部完成后，请下载答案文件发给组织者。", "intro_extra": "<p>请用电脑上的浏览器（Chrome、Edge 或 Safari）打开，不要用微信内置浏览器；请在同一个浏览器里完成，中途关闭页面不会丢失进度。<\/p>", "done_standalone": "请点击“下载答案文件”，把文件发给组织者；也可以点击“复制我的答案”，粘贴到消息里发送。", "download": "下载答案文件", "downloaded": "已下载。"};
+const MODE = "standalone";  // "standalone": a static page (GitHub Pages), without the claude.ai runtime
+const V = ["a", "b"];  // the two versions of every item; opaque ("a", "b") in a standalone page
+const P5 = "10000011100010";  // part-A version bits of rater slot 5 (slot 6: the complement), drawn by the generator
+const STUDY = "beat-check-r2";  // a later round on the same site keeps its own answers and file name
+const SLOTS = 6;
+const $ = (id) => document.getElementById(id);
+const fill = (s, v) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k]));
+const state = { slot: null, db: null, uid: null, answers: {}, queue: [], pos: 0, shownAt: 0, plays: 0 };
+
+function rng(seed) {  // mulberry32 over a string hash
+  let h = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i++) { h = Math.imul(h ^ seed.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
+  return () => { h |= 0; h = (h + 0x6D2B79F5) | 0; let t = Math.imul(h ^ (h >>> 15), 1 | h); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function shuffle(xs, seed) { const r = rng(seed), a = xs.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+// part A version per item: three balanced patterns (slots 1, 3, 5) and their complements (2, 4, 6), so no two raters
+// see the same versions, each sees half of the beats in each, and six raters rate every item three times per version
+function versionA(i, slot) {
+  const s = ((slot - 1) % 6) + 1, p3 = (i % 4 === 0 || i % 4 === 3) ? 0 : 1, p5 = +P5[i];
+  const bit = s === 3 ? p3 : s === 4 ? 1 - p3 : s === 5 ? p5 : s === 6 ? 1 - p5 : (i + s) % 2;
+  return V[bit];
+}
+
+function buildQueue(slot) {
+  const idx = ITEMS.map((_, i) => i);
+  const a = shuffle(idx, "A" + slot).map((i) => ({ qid: "A-" + ITEMS[i].id, part: "A", i, version: versionA(i, slot) }));
+  // swap: V[1] is shown first (left)
+  const b = shuffle(idx, "B" + slot).map((i) => ({ qid: "B-" + ITEMS[i].id, part: "B", i, swap: rng("side" + slot + ITEMS[i].id)() < 0.5 }));
+  return a.concat(b);
+}
+
+function localKey() { return (STUDY === "beat-check" ? "beatcheck" : STUDY) + "-answers-r" + state.slot; }
+function loadLocal() { try { return JSON.parse(localStorage.getItem(localKey()) || "{}"); } catch { return {}; } }
+function saveLocal() { try { localStorage.setItem(localKey(), JSON.stringify(state.answers)); } catch {} }
+
+async function connect() {
+  if (MODE === "standalone") return;  // answers stay in this browser and leave as a downloaded file
+  const c = window.claude;
+  if (!c || typeof c.use !== "function") return offline(T.local);
+  try {
+    const user = await c.use("user");
+    state.uid = user ? await user.id() : null;
+    state.db = state.uid ? await c.use("db") : null;
+  } catch { state.db = null; }
+  if (!state.db) return offline(T.local_signin);
+  $("save-status").textContent = T.saved;
+  $("save-status").classList.remove("warn");
+}
+function offline(msg) { state.db = null; $("save-status").textContent = msg; $("save-status").classList.add("warn"); }
+
+async function fetchSaved() {
+  if (!state.db) return {};
+  try {
+    const snap = await state.db.collection("ratings/" + state.uid + "/answers").get();
+    const out = {}; snap.docs.forEach((d) => { if (d.exists) out[d.id] = d.data(); }); return out;
+  } catch { return {}; }
+}
+
+async function persist(qid, body) {
+  state.answers[qid] = body; saveLocal();
+  if (!state.db) return;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { await state.db.doc("ratings/" + state.uid + "/answers/" + qid).set(body); return; }
+    catch (e) {
+      if (e && e.code === "unavailable" && attempt === 0) { await new Promise((r) => setTimeout(r, 600 + Math.random() * 900)); continue; }
+      offline(e && e.code === "invalid_argument" ? T.no_access : T.save_failed);
+      return;
+    }
+  }
+}
+
+function fmt(t) { const s = Math.floor(t), f = Math.floor((t - s) * 16); return "00:" + String(s).padStart(2, "0") + ":" + String(f).padStart(2, "0"); }
+
+function reel(item, version, label) {
+  const win = item.window[version];
+  const wrap = document.createElement("div"); wrap.className = "reel";
+  const top = document.createElement("div"); top.className = "reelbar";
+  const name = document.createElement("span"); name.className = "label"; name.textContent = label || T.clip;
+  const tc = document.createElement("span"); tc.className = "tc"; tc.textContent = fmt(0);
+  top.append(name, tc);
+  const well = document.createElement("div"); well.className = "well";
+  const v = document.createElement("video");
+  v.src = "clips/" + (item.clip ? item.clip[version] : item.id + "_" + version + ".mp4");
+  v.muted = true; v.playsInline = true; v.preload = "auto"; v.controls = true;
+  v.setAttribute("webkit-playsinline", ""); v.setAttribute("x5-playsinline", "");  // no forced fullscreen in mobile webviews
+  v.setAttribute("aria-label", (label || T.clip) + T.aria);
+  well.append(v);
+  const strip = document.createElement("div"); strip.className = "strip"; strip.setAttribute("aria-hidden", "true");
+  const head = document.createElement("span"); head.className = "head";
+  const note = document.createElement("div"); note.className = "why";
+  v.addEventListener("loadedmetadata", () => {
+    const D = v.duration || win[1];
+    const parts = [["ctx", win[0], T.prev], ["beat", win[1] - win[0], T.mid], ["ctx", D - win[1], T.nxt]];
+    strip.replaceChildren(...parts.filter((p) => p[1] > 0.05).map(([cls, d, txt]) => { const s = document.createElement("span"); s.className = cls; s.style.flex = String(d); s.textContent = txt; return s; }), head);
+    // a beat that opens or ends its film has only two shots in the clip: say so, or it reads as a broken clip
+    note.textContent = [win[0] <= 0.05 ? T.no_prev : "", Number.isFinite(v.duration) && v.duration - win[1] <= 0.05 ? T.no_next : ""].filter(Boolean).join(" ");
+  });
+  let raf = 0;
+  const tick = () => {
+    const D = v.duration || 1, t = v.currentTime;
+    head.style.left = "calc(" + (100 * t / D) + "% - 1px)"; tc.textContent = fmt(t);
+    well.classList.toggle("inbeat", t >= win[0] && t <= win[1]);
+    if (t >= win[1] - 0.1) wrap.dataset.seen = "1";
+    if (!v.paused && !v.ended) raf = requestAnimationFrame(tick);
+  };
+  v.addEventListener("play", () => { state.plays++; cancelAnimationFrame(raf); raf = requestAnimationFrame(tick); });
+  ["pause", "seeked", "ended", "timeupdate"].forEach((ev) => v.addEventListener(ev, () => { tick(); gate(); }));
+  wrap.append(top, well, strip, note);
+  wrap.video = v;
+  return wrap;
+}
+
+function choiceRow(name, legend, hint, opts) {
+  const fs = document.createElement("fieldset");
+  const lg = document.createElement("legend"); lg.textContent = legend;
+  if (hint) { const h = document.createElement("span"); h.className = "hint"; h.textContent = " " + hint; lg.append(h); }
+  const row = document.createElement("div"); row.className = "choices";
+  opts.forEach(([value, text]) => {
+    const l = document.createElement("label"); const inp = document.createElement("input");
+    inp.type = "radio"; inp.name = name; inp.value = value; inp.id = name + "-" + value; inp.addEventListener("change", gate);
+    l.append(inp, document.createTextNode(text)); row.append(l);
+  });
+  fs.append(lg, row); return fs;
+}
+
+function render() {
+  const q = state.queue[state.pos];
+  if (!q) return finish();
+  const item = ITEMS[q.i], nA = ITEMS.length;
+  $("part-label").textContent = q.part === "A" ? T.part_a : T.part_b;
+  const k = q.part === "A" ? state.pos + 1 : state.pos - nA + 1;
+  $("count").textContent = k + T.of + nA;
+  $("bar").style.width = (100 * state.pos / state.queue.length) + "%";
+  const ev = $("event"); ev.replaceChildren();
+  const lead = document.createElement("span"); lead.className = "label"; lead.textContent = T.event_label;
+  const main = document.createElement("span"); main.textContent = item.event_shown;
+  ev.append(lead, main);
+  if (item.event_orig) { const o = document.createElement("span"); o.className = "orig"; o.textContent = item.event_orig; o.lang = "en"; ev.append(o); }
+  const stage = $("stage"), form = $("qs");
+  stage.replaceChildren(); form.replaceChildren(); form.reset();
+  if (q.part === "A") {
+    const r = reel(item, q.version); stage.append(r);
+    r.video.autoplay = true;
+    form.append(choiceRow("shown", T.q_shown, "", [["yes", T.yes], ["partly", T.partly], ["no", T.no]]),
+                choiceRow("broken", T.q_broken, T.h_broken, [["yes", T.yes], ["no", T.no]]));
+  } else {
+    const order = q.swap ? [V[1], V[0]] : [V[0], V[1]];
+    const pair = document.createElement("div"); pair.className = "pair";
+    const reels = order.map((ver, j) => reel(item, ver, T.version + (j + 1)));
+    pair.append(...reels); stage.append(pair);
+    const both = document.createElement("button"); both.type = "button"; both.className = "ghost"; both.textContent = T.play_both;
+    both.addEventListener("click", () => reels.forEach((r) => { r.video.currentTime = 0; r.video.play().catch(() => {}); }));
+    stage.append(both);
+    reels.forEach((r) => { r.video.autoplay = true; });
+    form.append(choiceRow("clear", T.q_clear, "", [["1", T.version + "1"], ["same", T.same], ["2", T.version + "2"]]),
+                choiceRow("natural", T.q_natural, "", [["1", T.version + "1"], ["same", T.same], ["2", T.version + "2"]]));
+  }
+  state.shownAt = performance.now(); state.plays = 0;
+  gate();
+  window.scrollTo({ top: 0 });
+}
+
+function gate() {
+  const q = state.queue[state.pos]; if (!q) return;
+  const f = $("qs");
+  const names = q.part === "A" ? ["shown", "broken"] : ["clear", "natural"];
+  const answered = names.every((n) => f.querySelector("input[name=" + n + "]:checked"));
+  const reels = [...$("stage").querySelectorAll(".reel")];
+  const seen = reels.every((r) => r.dataset.seen === "1");
+  $("next").disabled = !(answered && seen);
+  $("gate").textContent = !seen ? (reels.length > 1 ? T.watch_two : T.watch_one) : !answered ? T.answer_both : "";
+}
+
+async function next() {
+  const q = state.queue[state.pos], f = $("qs");
+  const val = (n) => (f.querySelector("input[name=" + n + "]:checked") || {}).value || null;
+  const body = { part: q.part, item: ITEMS[q.i].id, slot: state.slot, ms: Math.round(performance.now() - state.shownAt), plays: state.plays, at: new Date().toISOString() };
+  if (q.part === "A") Object.assign(body, { version: q.version, shown: val("shown"), broken: val("broken") });
+  else Object.assign(body, { first: q.swap ? V[1] : V[0], clear: val("clear"), natural: val("natural") });
+  $("next").disabled = true;
+  await persist(q.qid, body);
+  state.pos++; render();
+}
+
+function finish() {
+  $("rate").hidden = true; $("done").hidden = false;
+  $("done-note").textContent = MODE === "standalone" ? T.done_standalone : state.db ? T.done_db : T.done_local;
+  $("download").hidden = MODE !== "standalone";
+}
+
+function answersText() {
+  return JSON.stringify({ page: STUDY, slot: state.slot, saved: new Date().toISOString(), answers: state.answers }, null, 1);
+}
+
+async function begin() {
+  state.queue = buildQueue(state.slot);
+  if (state.db) {  // one document per rater, so the organizer can list who answered (answers live below it)
+    try { await state.db.doc("ratings/" + state.uid).set({ slot: state.slot, started: new Date().toISOString(), items: ITEMS.length }); }
+    catch (e) { /* answers still try their own writes */ }
+  }
+  state.answers = Object.assign(loadLocal(), await fetchSaved());
+  state.pos = state.queue.findIndex((q) => !state.answers[q.qid]);
+  if (state.pos < 0) state.pos = state.queue.length;
+  $("start").hidden = true; $("rate").hidden = false; render();
+}
+
+function setup() {
+  $("est").textContent = fill(T.minutes, { k: Math.max(5, Math.round(ITEMS.length * 45 / 60)) });
+  const pre = /^#r([1-9])$/.exec(location.hash || "");
+  for (let s = 1; s <= SLOTS; s++) {
+    const l = document.createElement("label"); const inp = document.createElement("input");
+    inp.type = "radio"; inp.name = "slot"; inp.value = String(s); inp.id = "slot-" + s;
+    inp.addEventListener("change", () => { state.slot = s; $("go").disabled = false; note(); });
+    if (pre && +pre[1] === s) { inp.checked = true; state.slot = s; }
+    l.append(inp, document.createTextNode(T.rater + s)); $("slots").append(l);
+  }
+  $("go").disabled = !state.slot;
+  $("go").addEventListener("click", begin);
+  $("next").addEventListener("click", next);
+  $("download").addEventListener("click", () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([answersText()], { type: "application/json" }));
+    a.download = (STUDY === "beat-check" ? "beatcheck" : STUDY) + "_r" + state.slot + ".json";
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    $("copy-status").textContent = T.downloaded;
+  });
+  $("copy").addEventListener("click", async () => {
+    const text = answersText();
+    try { await navigator.clipboard.writeText(text); $("copy-status").textContent = T.copied; }
+    catch { const d = $("dump"); d.hidden = false; d.value = text; d.focus(); d.select(); $("copy-status").textContent = T.select_copy; }
+  });
+  note();
+}
+async function note() {
+  if (!state.slot) { $("resume-note").textContent = T.pick_slot; return; }
+  const n = Object.keys(Object.assign(loadLocal(), await fetchSaved())).length, m = 2 * ITEMS.length;
+  $("resume-note").textContent = n ? fill(T.resume, { n, m }) : fill(T.total, { m });
+}
+
+setup();
+connect().then(note);
+</script>
+</body>
+</html>
