@@ -124,6 +124,7 @@ const ITEMS = [{"id": "S0__20_meditation_class_zen_temple__shot_09_instructor_ap
 const T = {"h1": "镜头事件评审", "intro": "<p>你将观看一些由 AI 生成的影片片段。每个片段由连续的三个镜头组成：前一个镜头、<strong>中间镜头<\/strong>（我们要问的那一刻）和后一个镜头。视频下方的时间条用橙色标出中间镜头；播放到中间镜头时，视频外框也会变成橙色。少数片段位于影片的开头或结尾，只有两个镜头，这是正常的。<\/p><ul><li><strong>第一部分<\/strong>：每次看一个片段。中间镜头是否表现出了上方写的事件？画面有没有明显的问题？<\/li><li><strong>第二部分<\/strong>：同一时刻的两个版本并排播放。哪个版本把事件表现得更清楚？哪个看起来更自然？<\/li><\/ul><p>只根据你看到的画面判断。一个动作可以跨剪辑来表现（剪辑前一个镜头、剪辑后一个镜头），只要观众能明白事件发生了，就算表现出来了。片段没有声音。大多数人需要<span id=\"est\"><\/span>。<\/p><p>请用电脑上的浏览器（Chrome、Edge 或 Safari）打开，不要用微信内置浏览器；请在同一个浏览器里完成，中途关闭页面不会丢失进度。<\/p>", "slot_legend": "你的评审编号", "slot_hint": "（见发给你的链接）", "rater": "评审 ", "start": "开始", "next": "下一题", "done_h": "全部完成，谢谢！", "copy": "复制我的答案", "connecting": "答案会自动保存在本浏览器中。全部完成后，请下载答案文件发给组织者。", "saved": "答案会随作答自动保存。", "local": "答案仅保存在本浏览器中，结束时请复制答案。", "local_signin": "答案仅保存在本浏览器中（登录后可保存到研究中），结束时请复制答案。", "no_access": "你的权限无法在此保存答案，答案仅保存在本浏览器中，结束时请复制答案。", "save_failed": "保存失败，答案仅保存在本浏览器中，结束时请复制答案。", "part_a": "第一部分", "part_b": "第二部分", "of": " / ", "event_label": "中间镜头中的事件", "clip": "片段", "version": "版本 ", "aria": "：前一镜头、中间镜头、后一镜头", "prev": "前一镜头", "mid": "中间镜头", "nxt": "后一镜头", "play_both": "从头同时播放两个版本", "q_shown": "中间镜头是否表现出了这个事件？", "yes": "是", "partly": "部分", "no": "否", "q_broken": "中间镜头里有没有明显的问题？", "h_broken": "（肢体融化或多出、物体变形或突然出现、画面卡住不动）", "q_clear": "哪个版本把事件表现得更清楚？", "q_natural": "哪个版本看起来更自然？", "same": "差不多", "watch_one": "请看到中间镜头结束之后再作答。", "watch_two": "请把两个版本都看到中间镜头结束之后。", "answer_both": "请回答两个问题。", "done_db": "你的答案已保存，可以关闭此页面。", "done_local": "你的答案只保存在本浏览器中，请复制后发给组织者。", "copied": "已复制。", "select_copy": "请全选并复制下面的文字。", "pick_slot": "请先选择你的评审编号。", "resume": "你已回答 {n} 题（共 {m} 题），点击开始将从上次停下的地方继续。", "total": "共 {m} 道小题。", "minutes": "约 {k} 分钟", "no_prev": "这一段是影片的开头：没有前一个镜头，视频一开始就是中间镜头。", "no_next": "这一段是影片的结尾：中间镜头之后没有下一个镜头。", "standalone_saved": "答案会自动保存在本浏览器中。全部完成后，请下载答案文件发给组织者。", "intro_extra": "<p>请用电脑上的浏览器（Chrome、Edge 或 Safari）打开，不要用微信内置浏览器；请在同一个浏览器里完成，中途关闭页面不会丢失进度。<\/p>", "done_standalone": "请点击“下载答案文件”，把文件发给组织者；也可以点击“复制我的答案”，粘贴到消息里发送。", "download": "下载答案文件", "downloaded": "已下载。"};
 const MODE = "standalone";  // "standalone": a static page (GitHub Pages), without the claude.ai runtime
 const V = ["a", "b"];  // the two versions of every item; opaque ("a", "b") in a standalone page
+const P5 = "0000101010111100000101110000111101100001";  // part-A version bits of rater slot 5 (slot 6: the complement), drawn by the generator
 const SLOTS = 6;
 const $ = (id) => document.getElementById(id);
 const fill = (s, v) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k]));
@@ -135,11 +136,11 @@ function rng(seed) {  // mulberry32 over a string hash
   return () => { h |= 0; h = (h + 0x6D2B79F5) | 0; let t = Math.imul(h ^ (h >>> 15), 1 | h); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 function shuffle(xs, seed) { const r = rng(seed), a = xs.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-// part A version per item: slots 1 and 2 are complementary, 3 follows a second balanced pattern and 4 its complement,
-// 5 and 6 repeat 1 and 2 (with their own order), so with six raters every item is rated three times in each version
+// part A version per item: three balanced patterns (slots 1, 3, 5) and their complements (2, 4, 6), so no two raters
+// see the same versions, each sees half of the beats in each, and six raters rate every item three times per version
 function versionA(i, slot) {
-  const s = ((slot - 1) % 6) + 1, p3 = (i % 4 === 0 || i % 4 === 3) ? 0 : 1;
-  const bit = s === 3 ? p3 : s === 4 ? 1 - p3 : (i + s) % 2;
+  const s = ((slot - 1) % 6) + 1, p3 = (i % 4 === 0 || i % 4 === 3) ? 0 : 1, p5 = +P5[i];
+  const bit = s === 3 ? p3 : s === 4 ? 1 - p3 : s === 5 ? p5 : s === 6 ? 1 - p5 : (i + s) % 2;
   return V[bit];
 }
 
